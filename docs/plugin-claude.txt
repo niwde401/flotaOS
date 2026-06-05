@@ -1,0 +1,7 @@
+/plugin install prisma@claude-plugins-official
+/plugin install superpowers@claude-plugins-official
+/plugin install expo@claude-plugins-official
+/plugin install frontend-design@claude-plugins-official
+/plugin install github@claude-plugins-official
+/plugin install typescript-lsp@claude-plugins-official
+

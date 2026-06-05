@@ -1,0 +1,18 @@
+
+- **Frontend**: Vue 3 + TypeScript + Vite + TailwindCSS + Pinia.
+- **Backend**: Django REST Framework (Python 3.11).
+- **Database**: PostgreSQL 15.
+- **Messaging**: Redis (Message Broker for Celery).
+- **Containerization**: Docker & Docker Compose orchestration.
+
+Sugerencias adicionales:
+### Blue/Green Deployment Strategy
+Ensures **Zero-Downtime deployments** by toggling traffic between "Blue" and "Green" environments. The shared state (Postgres, Redis) persists across environment swaps.
+
+### Key Security Measures
+- **Secrets Management**: Secrets moved to `.env`, rotated keys, and protected by `.dockerignore`.
+
+### Workflow (Dev → Prod)
+1. **Local**: Dev work using `docker-compose.dev.yml`.
+2. **Git**: MR from `develop` → `main` for review.
+3. **Production**: `git pull` on server and run `./deploy.sh`.

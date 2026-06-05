@@ -11,7 +11,12 @@ async function main() {
   await prisma.$connect()
   console.log('PostgreSQL connected')
 
-  await ensureBucket()
+  // MinIO optional in dev
+  if (process.env.MINIO_DISABLED !== 'true') {
+    await ensureBucket()
+  } else {
+    console.log('MinIO disabled (dev mode) — photo uploads skipped')
+  }
 
   const app = createApp()
   const httpServer = http.createServer(app)

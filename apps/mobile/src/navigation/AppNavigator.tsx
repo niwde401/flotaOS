@@ -18,7 +18,7 @@ export type RootStackParams = {
   Parada: { tripId: string }
   FinActividades: { tripId: string }
   IngresoTaller: { tripId: string }
-  SalidaTaller: { tripId: string; ordenTrabajoId: string }
+  SalidaTaller: { tripId: string; ordenTrabajoId?: string }
   NuevoGasto: { tripId?: string }
 }
 

@@ -2,7 +2,7 @@ import { database, TripEventModel, ExpenseModel } from '../db'
 import { Q } from '@nozbe/watermelondb'
 import { tripsApi } from '../api/trips'
 import { expensesApi } from '../api/expenses'
-import { ConceptType, EventType } from '@flotaos/shared'
+import { ConceptType, EventType, ForceMajeureType } from '@flotaos/shared'
 
 let syncRunning = false
 
@@ -26,7 +26,7 @@ export async function runSync(): Promise<void> {
           notes: ev.notes ?? undefined,
           photoUrl: ev.photoUrl ?? undefined,
           isForceMajeure: ev.isForceMajeure,
-          fmType: ev.fmType as any ?? undefined,
+          fmType: ev.fmType ? (ev.fmType as ForceMajeureType) : undefined,
           fmPhotos: ev.fmPhotos?.length ? ev.fmPhotos : undefined,
           diagnostico: ev.diagnostico ?? undefined,
           kmEntrada: ev.kmEntrada ?? undefined,
@@ -48,15 +48,19 @@ export async function runSync(): Promise<void> {
 
     for (const exp of unsyncedExpenses) {
       try {
-        await expensesApi.create({
+        const created = await expensesApi.create({
           tripId: exp.tripServerId ?? undefined,
           concept: exp.concept as ConceptType,
           description: exp.description ?? undefined,
           amount: exp.amount,
+          voucherNumber: exp.voucherNumber ?? undefined,
           photoUrl: exp.photoUrl ?? undefined,
         })
         await database.write(async () => {
-          await exp.update((e) => { e.synced = true })
+          await exp.update((e) => {
+            e.synced = true
+            e.serverId = created.id
+          })
         })
       } catch (err) {
         console.warn('Sync expense failed:', err)

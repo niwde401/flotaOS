@@ -21,13 +21,15 @@ export default function GastosListScreen() {
   const [expenses, setExpenses] = useState<ExpenseDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function load() {
+    setError(null)
     try {
       const data = await expensesApi.list()
       setExpenses(data)
     } catch {
-      // offline — keep cached state
+      setError('Error cargando gastos')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -43,6 +45,8 @@ export default function GastosListScreen() {
       <TouchableOpacity style={styles.addBtn} onPress={() => nav.navigate('NuevoGasto', {})}>
         <Text style={styles.addText}>+ Nuevo Gasto</Text>
       </TouchableOpacity>
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
 
       <FlatList
         data={expenses}
@@ -76,4 +80,5 @@ const styles = StyleSheet.create({
   amount: { fontSize: 18, color: '#1e40af', marginTop: 4 },
   date: { color: '#6b7280', fontSize: 12, marginTop: 2 },
   empty: { textAlign: 'center', color: '#6b7280', marginTop: 40 },
+  errorText: { color: '#dc2626', textAlign: 'center', marginBottom: 12 },
 })

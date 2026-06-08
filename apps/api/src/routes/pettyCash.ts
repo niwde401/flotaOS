@@ -59,7 +59,7 @@ router.get('/transactions', requireAuth, async (req: Request, res: Response) => 
 router.post('/batches', requireAuth, async (req: Request, res: Response) => {
   const batchSchema = z.object({
     transactionIds: z.array(z.string().uuid()).min(1),
-    batchType: z.string().optional(),
+    batchType: z.enum(['weekly', 'monthly', 'special']).optional(),
   })
   const parsed = batchSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -83,24 +83,28 @@ router.post('/batches', requireAuth, async (req: Request, res: Response) => {
     const now = new Date()
     const batchCode = `LOTE-${staff.regionId.slice(0, 4).toUpperCase()}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`
 
-    const batch = await prisma.reimbursementBatch.create({
-      data: {
-        batchCode,
-        regionId: staff.regionId,
-        staffId: staff.id,
-        batchType: (batchType || 'weekly') as any,
-        totalAmount: total,
-        transactionCount: transactions.length,
-        status: 'draft',
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      const batch = await tx.reimbursementBatch.create({
+        data: {
+          batchCode,
+          regionId: staff.regionId,
+          staffId: staff.id,
+          batchType: (batchType || 'weekly') as any,
+          totalAmount: total,
+          transactionCount: transactions.length,
+          status: 'draft',
+        },
+      })
+
+      await tx.pettyCashTransaction.updateMany({
+        where: { id: { in: transactions.map(t => t.id) } },
+        data: { status: 'en_reembolso', batchId: batch.id },
+      })
+
+      return batch
     })
 
-    await prisma.pettyCashTransaction.updateMany({
-      where: { id: { in: transactionIds } },
-      data: { status: 'en_reembolso', batchId: batch.id },
-    })
-
-    return res.status(201).json({ success: true, data: batch })
+    return res.status(201).json({ success: true, data: result })
   } catch (err: any) {
     if (err?.code === 'P2002') {
       return res.status(409).json({ success: false, error: { code: 'CONFLICT', message: 'Batch code conflict, please retry' } })
@@ -116,6 +120,10 @@ router.patch('/batches/:id', requireAuth, async (req: Request, res: Response) =>
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } })
   }
   const { status, paymentReference } = req.body
+  const validBatchStatuses = ['draft', 'submitted', 'approved', 'paid']
+  if (status !== undefined && !validBatchStatuses.includes(status)) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: `status must be one of: ${validBatchStatuses.join(', ')}` } })
+  }
   try {
     const batch = await prisma.reimbursementBatch.update({
       where: { id: req.params.id },

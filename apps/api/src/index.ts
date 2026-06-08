@@ -4,6 +4,7 @@ import { Server } from 'socket.io'
 import { createApp } from './app'
 import { prisma } from './lib/prisma'
 import { ensureBucket } from './lib/minio'
+import { startScheduler } from './jobs/scheduler'
 
 const PORT = parseInt(process.env.API_PORT || '3001')
 
@@ -17,6 +18,8 @@ async function main() {
   } else {
     console.log('MinIO disabled (dev mode) — photo uploads skipped')
   }
+
+  await startScheduler()
 
   const app = createApp()
   const httpServer = http.createServer(app)

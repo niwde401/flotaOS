@@ -1,7 +1,7 @@
 # FlotaOS — Estado del Proyecto
-**Última actualización:** 2026-06-05  
+**Última actualización:** 2026-06-08  
 **Branch activo:** `develop`  
-**Commits realizados:** 14
+**Commits realizados:** 26
 
 ---
 
@@ -10,7 +10,7 @@
 | Plan | Archivo | Estado | Completado |
 |------|---------|--------|-----------|
 | Plan 1 — Infra & Monorepo | `plans/2026-06-05-plan-1-infra-setup.md` | ✅ COMPLETO | 2026-06-05 |
-| Plan 2 — API REST | `plans/2026-06-05-plan-2-api.md` | ⏳ PENDIENTE | — |
+| Plan 2 — API REST | `plans/2026-06-05-plan-2-api.md` | ✅ COMPLETO | 2026-06-08 |
 | Plan 3 — Mobile | `plans/2026-06-05-plan-3-mobile.md` | ⏳ PENDIENTE | — |
 | Plan 4 — Web Dashboard | `plans/2026-06-05-plan-4-web.md` | ⏳ PENDIENTE | — |
 
@@ -136,26 +136,24 @@ C:\Proyectos\FlotaOS\
 | `/api/trips` | GET, POST | ✅ Funciona |
 | `/api/trips/:id/status` | PATCH | ✅ Funciona |
 | `/api/trips/:id/events` | GET, POST | ✅ Funciona (con FM + taller) |
-| `/api/uploads/photo` | POST | ⏳ Stub (Plan 2) |
-| `/api/expenses` | GET, POST, PATCH | ⏳ Stub (Plan 2) |
-| `/api/maintenance/orders` | GET, POST, PATCH | ⏳ Stub (Plan 2) |
-| `/api/kpis/snapshots` | GET | ⏳ Stub (Plan 2) |
-| `/api/kpis/fleet-summary` | GET | ⏳ Stub (Plan 2) |
-| `/api/petty-cash/*` | GET, POST, PATCH | ⏳ Stub (Plan 2) |
+| `/api/uploads/photo` | POST | ✅ Funciona (MinIO requerido) |
+| `/api/expenses` | GET, POST, PATCH | ✅ Funciona |
+| `/api/maintenance/orders` | GET, POST, PATCH | ✅ Funciona |
+| `/api/kpis/snapshots` | GET | ✅ Funciona |
+| `/api/kpis/fleet-summary` | GET | ✅ Funciona |
+| `/api/petty-cash/accounts` | GET | ✅ Funciona |
+| `/api/petty-cash/transactions` | GET | ✅ Funciona |
+| `/api/petty-cash/batches` | POST, PATCH | ✅ Funciona |
 
 ---
 
-## Próximos pasos (mañana)
+## Próximos pasos
 
 1. **Abrir terminal** en `C:\Proyectos\FlotaOS`
 2. **Arrancar PostgreSQL** con el comando de arriba
-3. **Ejecutar Plan 2** con agente:
-   > "ejecuta el plan 2 con un agente"
-   - Implementa los 12 endpoints faltantes
-   - Reemplaza los stubs con implementación real
-   - Agrega BullMQ workers (quedarán deshabilitados en dev por REDIS_DISABLED)
-4. **Ejecutar Plan 3** (mobile) — puede correr en paralelo con Plan 2 una vez arrancado
-5. **Ejecutar Plan 4** (web dashboard) — puede correr en paralelo con Plan 3
+3. **Ejecutar Plan 3** (mobile):
+   > "ejecuta el plan 3 con un agente"
+4. **Ejecutar Plan 4** (web dashboard) — puede correr en paralelo con Plan 3
 
 ---
 

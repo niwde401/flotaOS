@@ -30,6 +30,9 @@ router.post('/orders', requireAuth, async (req: Request, res: Response) => {
     if (!vehiculoId || !fechaProgramada) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'vehiculoId and fechaProgramada required' } })
     }
+    if (isNaN(Date.parse(fechaProgramada))) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'fechaProgramada must be a valid date' } })
+    }
     const count = await prisma.ordenesTrabajo.count()
     const order = await prisma.ordenesTrabajo.create({
       data: {
@@ -42,7 +45,13 @@ router.post('/orders', requireAuth, async (req: Request, res: Response) => {
       },
     })
     return res.status(201).json({ success: true, data: order })
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      return res.status(409).json({ success: false, error: { code: 'CONFLICT', message: 'OT number conflict, please retry' } })
+    }
+    if (err?.code === 'P2003') {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_VEHICLE', message: 'Vehicle not found' } })
+    }
     console.error('POST order error:', err)
     return res.status(500).json({ success: false, error: { code: 'INTERNAL', message: 'Internal server error' } })
   }
@@ -54,10 +63,10 @@ router.patch('/orders/:id', requireAuth, async (req: Request, res: Response) => 
     const order = await prisma.ordenesTrabajo.update({
       where: { id: req.params.id },
       data: {
-        ...(status && { status }),
-        ...(taller && { taller }),
+        ...(status !== undefined && { status }),
+        ...(taller !== undefined && { taller }),
         ...(costoReal !== undefined && { costoReal }),
-        ...(trabajos && { trabajos }),
+        ...(trabajos !== undefined && { trabajos }),
         ...(kmSalida !== undefined && { kmSalida }),
         ...(status === 'completada' && { fechaCompletada: new Date() }),
       },

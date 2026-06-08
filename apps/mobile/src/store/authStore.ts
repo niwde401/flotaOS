@@ -42,10 +42,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   checkAuth: async () => {
-    const [token, userStr] = await AsyncStorage.multiGet(['accessToken', 'user'])
-    if (token[1] && userStr[1]) {
-      set({ user: JSON.parse(userStr[1]), isAuthenticated: true, isLoading: false })
-    } else {
+    try {
+      const [token, userStr] = await AsyncStorage.multiGet(['accessToken', 'user'])
+      if (token[1] && userStr[1]) {
+        set({ user: JSON.parse(userStr[1]), isAuthenticated: true })
+      }
+    } catch {
+      // storage unreadable — treat as logged out
+    } finally {
       set({ isLoading: false })
     }
   },

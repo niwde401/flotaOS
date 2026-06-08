@@ -11,7 +11,7 @@ type Props = StackScreenProps<RootStackParams, 'IngresoTaller'>
 
 export default function IngresoTallerScreen({ route, navigation }: Props) {
   const { tripId } = route.params
-  const { coords } = useLocation()
+  const { coords, error } = useLocation()
   const { pickAndUpload, uploading } = usePhotoUpload()
   const [diagnostico, setDiagnostico] = useState('')
   const [kmEntrada, setKmEntrada] = useState('')
@@ -70,7 +70,11 @@ export default function IngresoTallerScreen({ route, navigation }: Props) {
       >
         <Text style={styles.photoBtnText}>{uploading ? 'Subiendo...' : photoUrl ? 'Foto daño cargada ✓' : 'Foto del daño (recomendado)'}</Text>
       </TouchableOpacity>
-      <Text style={styles.gpsLabel}>GPS: {coords ? `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}` : 'Obteniendo...'}</Text>
+      {error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : (
+        <Text style={styles.gpsLabel}>GPS: {coords ? `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}` : 'Obteniendo...'}</Text>
+      )}
       <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={submitting || !coords}>
         {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Registrar Ingreso a Taller</Text>}
       </TouchableOpacity>
@@ -88,4 +92,5 @@ const styles = StyleSheet.create({
   gpsLabel: { color: '#6b7280', fontSize: 12, marginBottom: 16 },
   submitBtn: { backgroundColor: '#dc2626', borderRadius: 8, padding: 16, alignItems: 'center' },
   submitText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  errorText: { color: '#dc2626', marginBottom: 16, fontSize: 14 },
 })

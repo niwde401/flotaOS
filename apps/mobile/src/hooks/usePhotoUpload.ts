@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Alert } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { apiClient } from '../api/client'
 
@@ -32,6 +33,7 @@ export function usePhotoUpload() {
       })
       return res.data.data.url as string
     } catch {
+      Alert.alert('Error', 'No se pudo subir la foto')
       return null
     } finally {
       setUploading(false)

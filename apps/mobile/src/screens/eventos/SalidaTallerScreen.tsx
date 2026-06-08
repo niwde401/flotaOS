@@ -10,7 +10,7 @@ type Props = StackScreenProps<RootStackParams, 'SalidaTaller'>
 
 export default function SalidaTallerScreen({ route, navigation }: Props) {
   const { tripId } = route.params
-  const { coords } = useLocation()
+  const { coords, error } = useLocation()
   const [trabajos, setTrabajos] = useState('')
   const [kmSalida, setKmSalida] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -55,7 +55,11 @@ export default function SalidaTallerScreen({ route, navigation }: Props) {
         onChangeText={setKmSalida}
         keyboardType="numeric"
       />
-      <Text style={styles.gpsLabel}>GPS: {coords ? `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}` : 'Obteniendo...'}</Text>
+      {error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : (
+        <Text style={styles.gpsLabel}>GPS: {coords ? `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}` : 'Obteniendo...'}</Text>
+      )}
       <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={submitting || !coords}>
         {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Registrar Salida de Taller</Text>}
       </TouchableOpacity>
@@ -71,4 +75,5 @@ const styles = StyleSheet.create({
   gpsLabel: { color: '#6b7280', fontSize: 12, marginBottom: 16 },
   submitBtn: { backgroundColor: '#7c3aed', borderRadius: 8, padding: 16, alignItems: 'center' },
   submitText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  errorText: { color: '#dc2626', marginBottom: 16, fontSize: 14 },
 })

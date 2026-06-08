@@ -21,7 +21,7 @@ const FM_OPTIONS = [
 
 export default function ParadaScreen({ route, navigation }: Props) {
   const { tripId } = route.params
-  const { coords } = useLocation()
+  const { coords, error } = useLocation()
   const { pickAndUpload, uploading } = usePhotoUpload()
   const [notes, setNotes] = useState('')
   const [isFM, setIsFM] = useState(false)
@@ -59,7 +59,11 @@ export default function ParadaScreen({ route, navigation }: Props) {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.label}>GPS: {coords ? `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}` : 'Obteniendo...'}</Text>
+      {error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : (
+        <Text style={styles.label}>GPS: {coords ? `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}` : 'Obteniendo...'}</Text>
+      )}
       <TextInput
         style={styles.input}
         placeholder="Motivo de parada"
@@ -111,4 +115,5 @@ const styles = StyleSheet.create({
   photoBtnText: { color: '#374151' },
   submitBtn: { backgroundColor: '#d97706', borderRadius: 8, padding: 16, alignItems: 'center', marginTop: 8 },
   submitText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  errorText: { color: '#dc2626', marginBottom: 16, fontSize: 14 },
 })

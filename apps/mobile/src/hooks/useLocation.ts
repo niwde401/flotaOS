@@ -7,12 +7,12 @@ export function useLocation() {
 
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') {
-        setError('Permiso de ubicación denegado')
-        return
-      }
       try {
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status !== 'granted') {
+          setError('Permiso de ubicación denegado')
+          return
+        }
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
         setCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude })
       } catch {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native'
+import { ScrollView, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native'
 import { StackScreenProps } from '@react-navigation/stack'
 import { RootStackParams } from '../../navigation/AppNavigator'
 import { useLocation } from '../../hooks/useLocation'
@@ -11,7 +11,7 @@ type Props = StackScreenProps<RootStackParams, 'FinActividades'>
 
 export default function FinActividadesScreen({ route, navigation }: Props) {
   const { tripId } = route.params
-  const { coords } = useLocation()
+  const { coords, error } = useLocation()
   const { pickAndUpload, uploading } = usePhotoUpload()
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
@@ -37,8 +37,12 @@ export default function FinActividadesScreen({ route, navigation }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>GPS: {coords ? `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}` : 'Obteniendo...'}</Text>
+    <ScrollView style={styles.container}>
+      {error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : (
+        <Text style={styles.label}>GPS: {coords ? `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}` : 'Obteniendo...'}</Text>
+      )}
       <TextInput
         style={styles.input}
         placeholder="Observaciones finales"
@@ -57,7 +61,7 @@ export default function FinActividadesScreen({ route, navigation }: Props) {
       <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={submitting || !coords}>
         {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Finalizar Actividades</Text>}
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   )
 }
 
@@ -69,4 +73,5 @@ const styles = StyleSheet.create({
   photoBtnText: { color: '#374151' },
   submitBtn: { backgroundColor: '#1e40af', borderRadius: 8, padding: 16, alignItems: 'center' },
   submitText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  errorText: { color: '#dc2626', marginBottom: 16, fontSize: 14 },
 })

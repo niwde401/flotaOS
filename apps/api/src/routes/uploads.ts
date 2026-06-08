@@ -24,12 +24,15 @@ router.post('/photo', requireAuth, upload.single('photo'), async (req: Request, 
   const ext = path.extname(req.file.originalname).toLowerCase()
   const objectName = `field-photos/${req.user.userId}/${uuidv4()}${ext}`
 
-  await minioClient.putObject(BUCKET, objectName, req.file.buffer, req.file.size, {
-    'Content-Type': req.file.mimetype,
-  })
-
-  const signedUrl = await getSignedUrl(objectName, 3600)
-  return res.status(201).json({ success: true, data: { url: signedUrl, objectName } })
+  try {
+    await minioClient.putObject(BUCKET, objectName, req.file.buffer, req.file.size, {
+      'Content-Type': req.file.mimetype,
+    })
+    const signedUrl = await getSignedUrl(objectName, 3600)
+    return res.status(201).json({ success: true, data: { url: signedUrl, objectName } })
+  } catch {
+    return res.status(500).json({ success: false, error: { code: 'STORAGE_ERROR', message: 'Upload failed' } })
+  }
 })
 
 export default router

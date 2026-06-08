@@ -3,7 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 const API_URL = process.env.API_URL || 'http://localhost:3001'
 
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json()
+  let email: string, password: string
+  try {
+    ;({ email, password } = await req.json())
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
 
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',

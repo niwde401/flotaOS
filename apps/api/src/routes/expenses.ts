@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { ConceptType } from '@flotaos/shared'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
-import { scopeFilter } from '../middleware/scopeFilter'
 
 const router = Router()
 
@@ -22,10 +21,17 @@ const createExpenseSchema = z.object({
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
-    const scope = scopeFilter(req.user)
     const { status, month } = req.query
 
-    const where: any = { ...scope }
+    const where: any = {}
+    // scope by role
+    if (req.user.role === 'driver') {
+      // drivers don't have expenses - return empty
+      return res.json({ success: true, data: [] })
+    } else if (['coordinador', 'asistente', 'supervisor', 'tecnico'].includes(req.user.role) && req.user.regionId) {
+      where.regionId = req.user.regionId
+    }
+    // director sees all (no filter)
     if (status) where.status = status
     if (month) {
       const [year, m] = (month as string).split('-').map(Number)
@@ -58,44 +64,47 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
 
     const count = await prisma.pettyCashTransaction.count({ where: { regionId: staff.regionId } })
 
-    const expense = await prisma.pettyCashTransaction.create({
-      data: {
-        seqNumber: count + 1,
-        regionId: staff.regionId,
-        staffId: staff.id,
-        tripId: data.tripId,
-        transactionDate: data.transactionDate ? new Date(data.transactionDate) : new Date(),
-        concept: data.concept,
-        description: data.description,
-        nodeCode: data.nodeCode,
-        vehiclePlate: data.vehiclePlate,
-        amount: data.amount,
-        status: data.photoUrl ? 'pendiente' : 'observado',
-        voucherType: data.voucherType as any,
-        voucherNumber: data.voucherNumber,
-        photoUrl: data.photoUrl,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      const expense = await tx.pettyCashTransaction.create({
+        data: {
+          seqNumber: count + 1,
+          regionId: staff.regionId,
+          staffId: staff.id,
+          tripId: data.tripId,
+          transactionDate: data.transactionDate ? new Date(data.transactionDate) : new Date(),
+          concept: data.concept,
+          description: data.description,
+          nodeCode: data.nodeCode,
+          vehiclePlate: data.vehiclePlate,
+          amount: data.amount,
+          status: data.photoUrl ? 'pendiente' : 'observado',
+          voucherType: data.voucherType as any,
+          voucherNumber: data.voucherNumber,
+          photoUrl: data.photoUrl,
+        },
+      })
+
+      if ([ConceptType.vehicle_fuel, ConceptType.dg_refuel].includes(data.concept) && data.vehiclePlate && req.user.driverId) {
+        const vehicle = await tx.vehicle.findUnique({ where: { plateNumber: data.vehiclePlate } })
+        if (vehicle) {
+          await tx.fuelRecord.create({
+            data: {
+              vehicleId: vehicle.id,
+              driverId: req.user.driverId,
+              tripId: data.tripId,
+              liters: 0,
+              totalCost: data.amount,
+              kmAtRefuel: vehicle.currentKm,
+              receiptPhoto: data.photoUrl,
+            },
+          })
+        }
+      }
+
+      return expense
     })
 
-    // Auto-create fuel_record for fuel expenses
-    if ([ConceptType.vehicle_fuel, ConceptType.dg_refuel].includes(data.concept) && data.vehiclePlate) {
-      const vehicle = await prisma.vehicle.findUnique({ where: { plateNumber: data.vehiclePlate } })
-      if (vehicle) {
-        await prisma.fuelRecord.create({
-          data: {
-            vehicleId: vehicle.id,
-            driverId: req.user.driverId || '',
-            tripId: data.tripId,
-            liters: 0,
-            totalCost: data.amount,
-            kmAtRefuel: vehicle.currentKm,
-            receiptPhoto: data.photoUrl,
-          },
-        })
-      }
-    }
-
-    return res.status(201).json({ success: true, data: expense })
+    return res.status(201).json({ success: true, data: result })
   } catch (err) {
     return res.status(500).json({ success: false, error: { code: 'INTERNAL', message: 'Internal server error' } })
   }

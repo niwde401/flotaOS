@@ -11,8 +11,8 @@
 |------|---------|--------|-----------|
 | Plan 1 — Infra & Monorepo | `plans/2026-06-05-plan-1-infra-setup.md` | ✅ COMPLETO | 2026-06-05 |
 | Plan 2 — API REST | `plans/2026-06-05-plan-2-api.md` | ✅ COMPLETO | 2026-06-08 |
-| Plan 3 — Mobile | `plans/2026-06-05-plan-3-mobile.md` | ⏳ PENDIENTE | — |
-| Plan 4 — Web Dashboard | `plans/2026-06-05-plan-4-web.md` | ⏳ PENDIENTE | — |
+| Plan 3 — Mobile | `plans/2026-06-05-plan-3-mobile.md` | ✅ COMPLETO | 2026-06-08 |
+| Plan 4 — Web Dashboard | `plans/2026-06-05-plan-4-web.md` | ✅ COMPLETO | 2026-06-08 |
 
 ---
 

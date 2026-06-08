@@ -24,12 +24,16 @@ async function calcularKPIsDelDia() {
 
     await prisma.kpiSnapshot.upsert({
       where: { snapshotDate_vehicleId: { snapshotDate: today, vehicleId: vehicle.id } },
-      update: { fuelCost: totalFuelCost, maintenanceCost: totalMaintCost },
+      update: {
+        fuelCost: totalFuelCost,
+        maintenanceCost: totalMaintCost,
+        kmPerLiter: 0, // TODO: compute from odometer delta when GPS data is available
+      },
       create: {
         snapshotDate: today,
         vehicleId: vehicle.id,
         costPerKm: 0,
-        kmPerLiter: totalLiters > 0 ? totalFuelCost / totalLiters : 0,
+        kmPerLiter: 0, // TODO: compute from odometer delta when GPS data is available
         mechanicalAvailability: 100,
         mtbfDays: 0,
         mttrHours: 0,

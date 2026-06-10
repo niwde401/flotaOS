@@ -1,192 +1,180 @@
 # FlotaOS — Plan 5: Deploy EasyPanel (2026-06-10)
 
-**Goal:** Desplegar FlotaOS MVP en EasyPanel con todos los servicios: PostgreSQL, Redis, MinIO, API y Web. Verificar que el sistema funciona en producción con las mismas pruebas del E2E local.
+**Goal:** Desplegar FlotaOS MVP en EasyPanel con todos los servicios operativos: PostgreSQL, Redis, MinIO, API y Web. Verificar con smoke test y E2E completo en producción.
 
-**Prerequisito:** Cuenta de EasyPanel con un VPS Linux accesible (mínimo 2GB RAM). Repositorio `niwde401/flotaOS` en GitHub (ya existe).
+**Arquitectura de producción:**
+- EasyPanel despliega cada servicio **individualmente** desde su Dockerfile (no usa docker-compose.prod.yml — ese es solo referencia)
+- Servicios se comunican por nombre de servicio interno (red Docker de EasyPanel)
+- Traefik maneja routing + SSL automático por dominio
 
 ---
 
-## SECCIÓN 0: Prueba local pre-deploy (HOY, antes de EasyPanel)
+## SECCIÓN 0: Prueba local pre-deploy (opcional, HOY)
 
-Probar que la API arranca en modo producción real (JS compilado, no ts-node-dev).
+Confirmar que la API y Web arrancan con JS compilado antes de llegar a EasyPanel.
 
-### Step 1: Compilar la API
+### Step 1: Compilar y arrancar API en modo producción
 
 ```powershell
 cd C:\Proyectos\FlotaOS\apps\api
-npx tsc
-```
-
-Esperado: carpeta `dist/` generada sin errores.
-
-### Step 2: Arrancar en modo producción
-
-```powershell
-# PostgreSQL ya corriendo en local
-cd C:\Proyectos\FlotaOS\apps\api
-node dist/index.js
+npx tsc                  # genera dist/
+node dist/index.js       # arranca con PostgreSQL portable local
 ```
 
 Logs esperados:
 ```
 PostgreSQL connected
-MinIO disabled (dev mode)
-Redis disabled (dev mode)
+MinIO disabled (dev mode) — photo uploads skipped
+Redis disabled (dev mode) — BullMQ jobs skipped
 API running on port 3001
 ```
 
-### Step 3: Smoke test producción local
-
-```powershell
-Invoke-RestMethod http://localhost:3001/health
-```
-
-### Step 4: Compilar y arrancar Web en producción
+### Step 2: Compilar y arrancar Web en modo producción
 
 ```powershell
 cd C:\Proyectos\FlotaOS\apps\web
-npx next build
-npx next start
-# Abrir http://localhost:3000
+npx next build           # ya corrió antes — puede omitirse
+npx next start           # http://localhost:3000
 ```
 
-Verificar: login funciona, dashboard carga, 4 páginas operativas.
+Verificar: login funciona, las 4 páginas del dashboard cargan.
 
-### Step 5: Parar servidores y volver a dev
+### Step 3: Parar servidores
 
 ```powershell
 # Ctrl+C en ambas terminales
-cd C:\Proyectos\FlotaOS\apps\api
-npx ts-node-dev --respawn src/index.ts
 ```
 
 ---
 
-## SECCIÓN 1: Preparar variables de entorno de producción
+## SECCIÓN 1: Prerrequisitos (antes de abrir EasyPanel)
 
-### Step 1: Generar secrets seguros
+### Step 1: VPS y EasyPanel instalado
 
+- VPS Linux con mínimo **2 GB RAM** (recomendado 4 GB para todos los servicios)
+- EasyPanel instalado en el VPS: `curl -sSL https://get.easypanel.io | sh`
+- Acceso al panel en `http://IP_VPS:3000` o `https://panel.TU_DOMINIO.com`
+
+### Step 2: Conectar GitHub a EasyPanel
+
+1. EasyPanel → **Settings** → **GitHub**
+2. Click **Connect GitHub**
+3. Autorizar la OAuth app de EasyPanel en GitHub
+4. Confirmar que aparece la cuenta `niwde401`
+
+> Sin este paso, EasyPanel no puede clonar el repositorio.
+
+### Step 3: Configurar DNS
+
+En tu proveedor de DNS (Cloudflare, GoDaddy, etc.):
+
+| Registro | Nombre | Valor | TTL |
+|----------|--------|-------|-----|
+| A | `api` | `IP_DE_TU_VPS` | Auto |
+| A | `app` | `IP_DE_TU_VPS` | Auto |
+
+Verificar propagación:
 ```powershell
-# Generar JWT secrets (ejecutar en PowerShell)
-[System.Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
-# Ejecutar DOS VECES: una para JWT_SECRET, otra para JWT_REFRESH_SECRET
+Resolve-DnsName api.TU_DOMINIO.com
+Resolve-DnsName app.TU_DOMINIO.com
 ```
 
-### Step 2: Completar `.env.production.example`
+### Step 4: Preparar variables de entorno
 
-Ya existe en raíz del repo. Copiar como `.env.production` (NO commitear) y rellenar:
-
-```env
-# === BASE DE DATOS ===
-DATABASE_URL=postgresql://flotaos:CAMBIAR_PASSWORD@flotaos-postgres:5432/flotaos_db
-
-# === AUTENTICACIÓN ===
-JWT_SECRET=GENERAR_CON_OPENSSL_MIN_48_CHARS
-JWT_REFRESH_SECRET=GENERAR_CON_OPENSSL_MIN_48_CHARS
-
-# === REDIS ===
-REDIS_URL=redis://flotaos-redis:6379
-
-# === MINIO ===
-MINIO_ENDPOINT=flotaos-minio
-MINIO_PORT=9000
-MINIO_USE_SSL=false
-MINIO_ACCESS_KEY=flotaos_minio
-MINIO_SECRET_KEY=CAMBIAR_PASSWORD_MINIO
-MINIO_BUCKET=flotaos-photos
-
-# === APP ===
-NODE_ENV=production
-API_PORT=3001
-NEXT_PUBLIC_API_URL=https://api.TU_DOMINIO.com
-API_URL=http://flotaos-api:3001
-```
+1. Copiar `.env.production.example` como `.env.production` (local, nunca al repo)
+2. Generar los JWT secrets:
+   ```powershell
+   # Ejecutar DOS veces — copiar cada resultado
+   [System.Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+   ```
+3. Rellenar todos los campos marcados con `CAMBIAR_*`
+4. Tener el archivo abierto durante el deploy para copiar valores
 
 ---
 
-## SECCIÓN 2: Configurar EasyPanel
+## SECCIÓN 2: Crear servicios en EasyPanel
 
-### Step 1: Crear proyecto en EasyPanel
+> Todos los servicios van dentro del mismo **Proyecto** en EasyPanel.
+> Crear primero: **Projects → + New Project → nombre: `flotaos`**
 
-1. Entrar a EasyPanel → **Projects** → **+ New Project**
-2. Nombre: `flotaos`
+### Step 1: PostgreSQL
 
-### Step 2: Crear servicio PostgreSQL
-
-1. **+ New Service** → **Postgres**
+1. **+ New Service → Postgres**
 2. Name: `flotaos-postgres`
-3. Version: `15`
-4. Database: `flotaos_db`
-5. User: `flotaos`
-6. Password: el mismo de `DATABASE_URL`
-7. **Deploy**
+3. Image: `postgres:15-alpine`
+4. Database: `flotaos_db` | User: `flotaos` | Password: `CAMBIAR_PASSWORD_DB`
+5. **Deploy** → esperar estado `running`
 
-### Step 3: Crear servicio Redis
+### Step 2: Redis
 
-1. **+ New Service** → **Redis**
+1. **+ New Service → Redis**
 2. Name: `flotaos-redis`
-3. Version: `7`
-4. **Deploy**
+3. Image: `redis:7-alpine`
+4. **Deploy** → esperar estado `running`
 
-### Step 4: Crear servicio MinIO
+### Step 3: MinIO
 
-1. **+ New Service** → **App** (Docker image)
+1. **+ New Service → App** (custom)
 2. Name: `flotaos-minio`
 3. Image: `minio/minio`
 4. Command: `server /data --console-address ":9001"`
-5. Port: `9000` (API) y `9001` (console)
+5. Ports: `9000` (API) y `9001` (console)
 6. Variables de entorno:
    ```
    MINIO_ROOT_USER=flotaos_minio
    MINIO_ROOT_PASSWORD=CAMBIAR_PASSWORD_MINIO
    ```
-7. Volume: `/data` → persistente
-8. **Deploy**
+7. Volume: `/data` → habilitar persistencia
+8. **Deploy** → esperar estado `running`
 
-### Step 5: Crear servicio API
+> El bucket `flotaos-photos` **se crea automáticamente** cuando la API arranque por primera vez.
+> No necesitas crearlo manualmente.
 
-1. **+ New Service** → **App** (GitHub)
+### Step 4: API
+
+1. **+ New Service → App** (GitHub)
 2. Name: `flotaos-api`
-3. Repositorio: `niwde401/flotaOS`
-4. Branch: `main`
-5. Dockerfile path: `apps/api/Dockerfile`
-6. Build context: `.` (raíz del repo)
-7. Port: `3001`
-8. Variables de entorno: pegar todo el bloque de `.env.production` (sección API)
-9. **NO deployar aún** — primero configurar dominio
+3. Repository: `niwde401/flotaOS` | Branch: `main`
+4. Dockerfile path: `apps/api/Dockerfile`
+5. Build context: `.` ← raíz del repo, no cambiar
+6. Port: `3001`
+7. Variables de entorno — pegar todo el bloque:
+   ```
+   DATABASE_URL=postgresql://flotaos:CAMBIAR_PASSWORD_DB@flotaos-postgres:5432/flotaos_db
+   REDIS_URL=redis://flotaos-redis:6379
+   JWT_SECRET=TU_SECRET_GENERADO
+   JWT_REFRESH_SECRET=TU_REFRESH_SECRET_GENERADO
+   MINIO_ENDPOINT=flotaos-minio
+   MINIO_PORT=9000
+   MINIO_USE_SSL=false
+   MINIO_ACCESS_KEY=flotaos_minio
+   MINIO_SECRET_KEY=CAMBIAR_PASSWORD_MINIO
+   MINIO_BUCKET=flotaos-photos
+   WEB_URL=https://app.TU_DOMINIO.com
+   CLAUDE_API_KEY=sk-ant-XXXXXXXX
+   NODE_ENV=production
+   API_PORT=3001
+   ```
+8. Domain: `api.TU_DOMINIO.com` → habilitar HTTPS
+9. Health check path: `/health`
+10. **Deploy** → esperar build completo (3–5 min primera vez)
 
-### Step 6: Configurar dominio API
+### Step 5: Web
 
-1. En el servicio `flotaos-api` → **Domains**
-2. Añadir: `api.TU_DOMINIO.com`
-3. Enable HTTPS (Let's Encrypt automático)
-
-### Step 7: Crear servicio Web
-
-1. **+ New Service** → **App** (GitHub)
+1. **+ New Service → App** (GitHub)
 2. Name: `flotaos-web`
-3. Repositorio: `niwde401/flotaOS`
-4. Branch: `main`
-5. Dockerfile path: `apps/web/Dockerfile`
-6. Build context: `.`
-7. Port: `3000`
-8. Variables de entorno:
+3. Repository: `niwde401/flotaOS` | Branch: `main`
+4. Dockerfile path: `apps/web/Dockerfile`
+5. Build context: `.`
+6. Port: `3000`
+7. Variables de entorno:
    ```
    NODE_ENV=production
    API_URL=http://flotaos-api:3001
    NEXT_PUBLIC_API_URL=https://api.TU_DOMINIO.com
    ```
-9. **Dominio:** `app.TU_DOMINIO.com` (o `TU_DOMINIO.com`)
-
-### Step 8: Deploy en orden
-
-```
-1. Deploy flotaos-postgres  → esperar "running"
-2. Deploy flotaos-redis     → esperar "running"
-3. Deploy flotaos-minio     → esperar "running"
-4. Deploy flotaos-api       → esperar build + "running"
-5. Deploy flotaos-web       → esperar build + "running"
-```
+8. Domain: `app.TU_DOMINIO.com` → habilitar HTTPS
+9. **Deploy** → esperar build completo (3–5 min)
 
 ---
 
@@ -194,109 +182,167 @@ API_URL=http://flotaos-api:3001
 
 ### Step 1: Ejecutar migraciones
 
-En EasyPanel → servicio `flotaos-api` → **Console** o **Terminal**:
+En EasyPanel → servicio `flotaos-api` → **Terminal** (o **Console**):
 
 ```bash
-cd /app
 npx prisma migrate deploy
 ```
 
-Esperado: `1 migration applied` (init_complete_schema).
+Esperado:
+```
+1 migration applied: 20260605222840_init_complete_schema
+```
+
+> Si ya corrió antes (redeploy), dirá "No pending migrations" — eso es correcto.
 
 ### Step 2: Ejecutar seed (solo primera vez)
 
-```bash
-node -e "require('./dist/prisma/seed.js')"
-```
-
-O si el seed no fue compilado:
+En la misma terminal del servicio `flotaos-api`:
 
 ```bash
-# Desde la consola del servicio
-DATABASE_URL="..." npx ts-node prisma/seed.ts
+npm run seed
 ```
 
-### Step 3: Verificar health
-
-```bash
-curl https://api.TU_DOMINIO.com/health
-# Esperado: {"status":"ok","ts":"..."}
+Esperado:
 ```
+Seed complete. Users: director@yofc.pe, coord@yofc.pe, driver@yofc.pe (all pw: Admin1234!)
+```
+
+> `npm run seed` usa `ts-node prisma/seed.ts`. ts-node está disponible en el contenedor
+> porque el Dockerfile copia todos los `node_modules` del builder stage.
+
+> **No ejecutar dos veces** — `zone.create` y `team.create` fallarían con unique constraint.
+> Si necesitas re-seedear: `npx prisma migrate reset` (borra todos los datos).
 
 ---
 
-## SECCIÓN 4: Pruebas en producción
+## SECCIÓN 4: Verificación en producción
 
-### Step 1: Smoke test API
+### Step 1: Health check API
 
 ```powershell
-# Desde local
-$r = Invoke-RestMethod -Uri https://api.TU_DOMINIO.com/auth/login -Method Post `
-  -Body '{"email":"coord@yofc.pe","password":"Admin1234!"}' `
-  -ContentType "application/json"
-$r.data.user
+Invoke-RestMethod https://api.TU_DOMINIO.com/health
+# Esperado: {"status":"ok","ts":"..."}
 ```
 
-### Step 2: Smoke test Web
+### Step 2: Login desde la web
 
-Abrir `https://app.TU_DOMINIO.com`:
-- Login con `coord@yofc.pe` / `Admin1234!`
-- Verificar: Dashboard KPI, Caja Chica, Mantenimiento, Vehículos
+1. Abrir `https://app.TU_DOMINIO.com`
+2. Login con `coord@yofc.pe` / `Admin1234!`
+3. Verificar que cargan: Dashboard KPI, Caja Chica, Mantenimiento, Vehículos
 
-### Step 3: E2E trip flow en producción
+### Step 3: E2E trip flow vía API
 
 ```powershell
 $base = "https://api.TU_DOMINIO.com"
 
-# Login como driver
-$login = Invoke-RestMethod -Uri "$base/auth/login" -Method Post `
-  -Body '{"email":"driver@yofc.pe","password":"Admin1234!"}' `
-  -ContentType "application/json"
-$token = $login.data.accessToken
-$h = @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" }
+# 1. Login coord
+$coord = Invoke-RestMethod -Uri "$base/auth/login" -Method Post `
+  -Body '{"email":"coord@yofc.pe","password":"Admin1234!"}' -ContentType "application/json"
+$hCoord = @{ Authorization = "Bearer $($coord.data.accessToken)"; "Content-Type" = "application/json" }
 
-# Crear viaje (como coord)
-# ... (mismo flujo que en local)
+# 2. Crear viaje
+$trip = Invoke-RestMethod -Uri "$base/api/trips" -Method Post -Headers $hCoord -Body (@{
+    vehicleId   = (Invoke-RestMethod -Uri "$base/api/vehicles" -Headers $hCoord).data[0].id
+    teamId      = (Invoke-RestMethod -Uri "$base/api/teams" -Headers $hCoord).data[0].id
+    driverId    = "782da0e6-ded7-4f67-b38e-115dd255e142"  # driver del seed
+    origin      = "Lima - HQ"
+    destination = "Piura - Nodo 14"
+    tripDate    = (Get-Date).ToString("yyyy-MM-dd")
+} | ConvertTo-Json)
+$tripId = $trip.data.id
+Write-Host "Trip: $tripId"
+
+# 3. Login driver
+$driver = Invoke-RestMethod -Uri "$base/auth/login" -Method Post `
+  -Body '{"email":"driver@yofc.pe","password":"Admin1234!"}' -ContentType "application/json"
+$hDriver = @{ Authorization = "Bearer $($driver.data.accessToken)"; "Content-Type" = "application/json" }
+
+# 4. Evento llegada_sitio
+Invoke-RestMethod -Uri "$base/api/trips/$tripId/events" -Method Post -Headers $hDriver `
+  -Body (@{ eventType="llegada_sitio"; latitude=-12.046374; longitude=-77.042793 } | ConvertTo-Json)
+
+# 5. Verificar
+$events = Invoke-RestMethod -Uri "$base/api/trips/$tripId/events" -Headers $hDriver
+Write-Host "Eventos: $($events.data.Count)"
 ```
 
 ### Step 4: Verificar foto upload (MinIO)
 
-```powershell
-# POST a /api/uploads/photo con un archivo real
-# Verificar que retorna una URL de MinIO
+En la terminal del servicio `flotaos-api`:
+
+```bash
+# Verificar que el bucket existe
+node -e "const {minioClient,BUCKET} = require('./lib/minio'); minioClient.bucketExists(BUCKET).then(console.log)"
+# Esperado: true
 ```
 
-### Step 5: Verificar Mobile apunta a producción
+### Step 5: Verificar KPI workers (Redis + BullMQ)
 
-En `apps/mobile/src/config.ts`:
+```powershell
+# Debe retornar datos KPI tras ejecutarse el worker diario
+Invoke-RestMethod -Uri "https://api.TU_DOMINIO.com/api/kpis/fleet-summary" `
+  -Headers @{ Authorization = "Bearer $($coord.data.accessToken)" }
+```
+
+---
+
+## SECCIÓN 5: Configurar Mobile para producción
+
+En `apps/mobile/src/config.ts` el valor por defecto es `localhost:3001`. Para apuntar a producción:
+
+### Opción A — Variable de entorno Expo (recomendada)
+
+Crear `apps/mobile/.env`:
+```env
+EXPO_PUBLIC_API_URL=https://api.TU_DOMINIO.com
+```
+
+Luego hacer commit y rebuild de la app.
+
+### Opción B — Cambio directo en config.ts
+
 ```typescript
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.TU_DOMINIO.com'
 ```
 
-Actualizar `EXPO_PUBLIC_API_URL` y hacer `expo build` o `eas build`.
-
 ---
 
-## SECCIÓN 5: CI/CD con GitHub (opcional, post-MVP)
+## SECCIÓN 6: Auto-deploy con GitHub (opcional)
 
-### Webhook automático
+Para que cada push a `main` redesplegue automáticamente:
 
-1. En EasyPanel → servicio → **General** → habilitar **Auto Deploy**
-2. Branch: `main`
-3. Cada push a `main` → rebuild automático
+1. EasyPanel → servicio `flotaos-api` → **General**
+2. Habilitar **Auto Deploy** → Branch: `main`
+3. Repetir para `flotaos-web`
+
+> Cada merge a `main` disparará un rebuild. Las migraciones se deben ejecutar manualmente
+> después de cada deploy que incluya cambios de schema.
 
 ---
 
 ## Checklist final
 
-- [ ] PostgreSQL corriendo en EasyPanel
-- [ ] Redis corriendo en EasyPanel
-- [ ] MinIO corriendo con bucket `flotaos-photos` creado
-- [ ] API accesible en `https://api.TU_DOMINIO.com/health`
-- [ ] Web accesible en `https://app.TU_DOMINIO.com/login`
-- [ ] Migraciones aplicadas (`prisma migrate deploy`)
-- [ ] Seed ejecutado (usuarios de prueba disponibles)
-- [ ] Login funciona desde el web
-- [ ] E2E trip flow desde la API
-- [ ] Foto upload funciona (MinIO)
-- [ ] Mobile apuntando a URL de producción
+**Prerrequisitos:**
+- [ ] VPS con ≥ 2 GB RAM y EasyPanel instalado
+- [ ] GitHub conectado a EasyPanel (OAuth)
+- [ ] DNS: `api.TU_DOMINIO.com` y `app.TU_DOMINIO.com` apuntando al VPS
+
+**Servicios:**
+- [ ] `flotaos-postgres` running
+- [ ] `flotaos-redis` running
+- [ ] `flotaos-minio` running
+- [ ] `flotaos-api` running en `https://api.TU_DOMINIO.com`
+- [ ] `flotaos-web` running en `https://app.TU_DOMINIO.com`
+
+**Post-deploy:**
+- [ ] `npx prisma migrate deploy` ejecutado en API
+- [ ] `npm run seed` ejecutado (solo primera vez)
+
+**Verificación:**
+- [ ] `/health` retorna `{"status":"ok"}`
+- [ ] Login en web funciona
+- [ ] 4 páginas del dashboard cargan
+- [ ] E2E trip flow desde API
+- [ ] Bucket MinIO `flotaos-photos` creado automáticamente
+- [ ] Mobile apunta a URL de producción

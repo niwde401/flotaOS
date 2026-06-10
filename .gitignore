@@ -6,3 +6,6 @@ dist/
 .env.local
 .env.production
 .superpowers/
+*.log
+api.log
+web.log
